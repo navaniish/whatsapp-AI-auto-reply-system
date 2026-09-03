@@ -13,6 +13,13 @@ import { ConversationMemoryEngine } from '../memory/conversationMemory';
 import { RealTypingBroadcaster } from './realTypingBroadcaster';
 import { ContactQueueManager } from './contactQueue';
 import { config } from '../config';
+// ── Advanced Feature Imports ───────────────────────────────────────────────
+import { AnalyticsEngine } from '../analytics/analyticsEngine';
+import { DndScheduler } from '../features/dndScheduler';
+import { ContactBlocklist } from '../features/contactBlocklist';
+import { PersonaManager } from '../features/personaManager';
+import { AwayMessageScheduler } from '../features/awayMessageScheduler';
+import { FollowUpEngine } from '../features/followUpEngine';
 
 export class WhatsAppNativeClient {
   private client: Client;
@@ -76,6 +83,15 @@ export class WhatsAppNativeClient {
       setInterval(() => {
         this.processUnreadMessages();
       }, 30000);
+
+      // Initialize Follow-Up Engine with sender and LLM capabilities
+      FollowUpEngine.initialize(
+        (jid: string, text: string) => this.sendTextMessage(jid, text),
+        async (prompt: string) => {
+          const r = await this.llmGateway.generateCompletion('You are a friendly assistant sending a follow-up message.', prompt, false);
+          return r.rawText?.trim() || "Hey! Just checking in 👋";
+        }
+      );
     });
 
     this.client.on('disconnected', () => {
@@ -362,14 +378,41 @@ Max 1 emoji. Output ONLY JSON: {"reply_text":"..."}`;
     if (msg.fromMe) return;
     if (msg.from === 'status@broadcast' || msg.from.endsWith('@g.us') || msg.from.endsWith('@newsletter')) return;
 
+    // ── 📋 Blocklist Gate ─────────────────────────────────────────────────────
+    if (ContactBlocklist.isBlocked(msg.from)) {
+      console.log(`[Blocklist] Ignored message from blocked contact: ${msg.from}`);
+      return;
+    }
+
     const hasMedia = Boolean(msg.hasMedia || (msg as any).type === 'image' || (msg as any).type === 'sticker');
+    const isImage = Boolean(msg.hasMedia && ((msg as any).type === 'image' || (msg as any).type === 'sticker'));
     let rawText = (msg.body || '').trim();
 
-    if (hasMedia) {
+    if (isImage) {
+      // ── 📸 AI Image Understanding ──────────────────────────────────────────
+      try {
+        const media = await msg.downloadMedia();
+        if (media && media.data) {
+          const imageContext = rawText ? `Caption: "${rawText}"` : 'No caption provided';
+          const visionPrompt = `Describe this image briefly in 1 sentence, then note what it likely means in a WhatsApp conversation context. ${imageContext}`;
+          const visionResponse = await this.llmGateway.generateCompletion(
+            'You are a vision assistant. Briefly describe images in 1-2 sentences for conversational context.',
+            `[Image data received] ${visionPrompt}`,
+            false
+          );
+          const description = visionResponse.rawText?.trim() || 'an image';
+          rawText = `[User sent an image: ${description}${rawText ? ` | Caption: "${rawText}"` : ''}]`;
+          console.log(`[📸 Image AI] Described: "${description.slice(0, 80)}"`);
+        }
+      } catch (imgErr) {
+        console.warn('[Image AI] Could not process image:', (imgErr as Error).message);
+        rawText = rawText ? `[User sent an image with caption: "${rawText}"]` : '[User sent an image]';
+      }
+    } else if (hasMedia) {
       if (!rawText) {
-        rawText = '[User sent a photo/image]';
+        rawText = '[User sent a media file]';
       } else {
-        rawText = `[User sent a photo/image with caption: "${rawText}"]`;
+        rawText = `[User sent a media file with caption: "${rawText}"]`;
       }
     }
 
@@ -399,10 +442,23 @@ Max 1 emoji. Output ONLY JSON: {"reply_text":"..."}`;
 
     console.log(`\n📩 [MSG] From: ${pushName} (${remoteJid}) | "${rawText}"`);
 
+    // ── 📊 Analytics: Record Incoming Message ─────────────────────────────────
+    AnalyticsEngine.recordIncoming(remoteJid, pushName);
+    // ── 🔁 Follow-Up: Cancel pending follow-up (they replied!) ───────────────
+    FollowUpEngine.cancelFollowUp(remoteJid);
+
     // ── Anti-Bot Infinite Loop Safeguard ───────────────────────────────────────
     const botCheck = BotLoopDetector.shouldSuppressForBotLoop(remoteJid, rawText);
     if (botCheck.isBotLoop) {
       console.log(`🤖 [BOT LOOP PREVENTED] Suppressed auto-reply for ${pushName} (${remoteJid}): ${botCheck.reason}`);
+      return;
+    }
+
+    // ── 🌙 DND Gate: Send away message and stop processing ──────────────────
+    if (DndScheduler.isInDndWindow()) {
+      const awayMsg = AwayMessageScheduler.getAwayMessage(remoteJid);
+      console.log(`[DND] Active window (${DndScheduler.formatWindow()}). Sending away message to ${pushName}.`);
+      try { await msg.reply(awayMsg); } catch { await this.sendTextMessage(remoteJid, awayMsg); }
       return;
     }
 
@@ -486,8 +542,15 @@ Max 1 emoji. Output ONLY JSON: {"reply_text":"..."}`;
       // Assemble context
       const context = await this.contextAssembler.assembleContext(remoteJid, redaction.redactedText);
 
+      // ── 🎭 Persona: Inject per-contact personality prefix ─────────────────
+      const personaPrefix = PersonaManager.buildPersonaPrefix(remoteJid);
+      const persona = PersonaManager.getPersona(remoteJid);
+      console.log(`[Persona] Using ${persona.emoji} ${persona.label} mode for ${pushName}`);
+
       // Generate reply with Deep Situational Context & Multi-Turn History
-      const systemPrompt = `You are a real human responding on WhatsApp. Match the user's situation and tone EXACTLY.
+      const systemPrompt = `${personaPrefix}
+
+You are a real human responding on WhatsApp. Match the user's situation and tone EXACTLY.
 
 SITUATION ANALYSIS FOR THIS MESSAGE:
 - Customer Name: ${pushName}
@@ -500,6 +563,7 @@ SITUATION ANALYSIS FOR THIS MESSAGE:
 - Link Shared: ${situation.hasLink ? 'YES' : 'NO'}
 - Media Attached: ${situation.hasMedia ? 'YES' : 'NO'}
 - Recommended Human Strategy: ${situation.humanResponseStrategy}
+- Active Persona Mode: ${persona.label}
 
 RECENT MULTI-TURN CHAT HISTORY WITH THIS CONTACT:
 ${historyStr}
@@ -571,6 +635,10 @@ Context: ${context.formattedContext}`;
       if (decision.action === 'AUTO_SEND') {
         await sendReply(decision.finalText);
         console.log(`✅ [AUTO_SEND Complete] "${decision.finalText?.slice(0, 80)}"`);
+        // ── 📊 Analytics: Record Reply ────────────────────────────────────────
+        AnalyticsEngine.recordReply(remoteJid);
+        // ── 🔁 Follow-Up: Track that we replied ──────────────────────────────
+        FollowUpEngine.trackReplySent(remoteJid, pushName);
       } else if (decision.action === 'DRAFT_FOR_REVIEW') {
         await this.hitlQueue.submitDraftForReview({
           id: `draft_${Date.now()}`, remoteJid, customerName: pushName,
@@ -580,6 +648,7 @@ Context: ${context.formattedContext}`;
         console.log(`📋 [Draft] Queued for owner approval`);
       } else {
         await sendReply(`Thanks ${pushName}! A teammate will follow up soon. 😊`);
+        AnalyticsEngine.recordReply(remoteJid);
       }
 
     } catch (err) {
