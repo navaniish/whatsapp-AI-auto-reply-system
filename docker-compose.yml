@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  whatsapp-ai-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whatsapp_ai_agent_247
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+      - NVIDIA_CLASSIFIER_KEY=nvapi-8y4iJqfFv7Z8aV1F9K1a5g3j0d2s4a6b8c0d
+      - OWNER_WHATSAPP_NUMBER=+917075708980
+      - META_WEBHOOK_VERIFY_TOKEN=whatsapp_ai_secure_token
+    volumes:
+      - ./.wwebjs_auth:/app/.wwebjs_auth
+      - ./.wwebjs_cache:/app/.wwebjs_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

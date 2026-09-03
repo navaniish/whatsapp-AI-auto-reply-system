@@ -1,0 +1,29 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Build output
+dist/
+build/
+
+# Environment variables (CRITICAL: Do not commit!)
+.env
+
+# WhatsApp Web Session & Cache (CRITICAL: Contains private chat keys!)
+whatsapp_session/
+.wwebjs_cache/
+.wwebjs_auth/
+
+# PM2 and logs
+logs/
+*.log
+.pm2/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
