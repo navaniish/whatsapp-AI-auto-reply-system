@@ -19,10 +19,10 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
-    nss \
+    libnss3 \
     libpango-1.0-0 \
     pangocairo-1.0-0 \
-    stdc++6 \
+    libstdc++6 \
     libx11-6 \
     libx11-xcb1 \
     libxcb1 \
