@@ -97,12 +97,14 @@ h1{font-size:28px}p{color:#8b949e}
 p{color:#8b949e;font-size:14px}
 .btn{display:inline-block;padding:10px 20px;background:#30363d;color:#e6edf3;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;margin-top:12px;border:1px solid #484f58;transition:.2s}
 .btn:hover{background:#484f58}
+.err-box{background:#f8514922;border:1px solid #f8514988;color:#ff7b72;padding:14px 20px;border-radius:10px;max-width:520px;font-size:13px;text-align:left;line-height:1.5}
 </style></head>
 <body>
   <div class="spin"></div>
   <h1>📱 Starting WhatsApp Engine…</h1>
   <p>Launching browser and waiting for QR code. Auto-refreshes every 3 seconds.</p>
-  <p>If loading takes more than 15 seconds, your previous session may be stuck:</p>
+  ${state.lastError ? `<div class="err-box"><b>⚠️ Engine Launch Warning:</b> ${state.lastError}</div>` : ''}
+  <p style="margin-top:8px">If loading takes more than 15 seconds, click below to force a fresh QR:</p>
   <a href="/reset-session" class="btn">🔄 Clear Stale Session & Force New QR</a>
 </body></html>`);
     return;

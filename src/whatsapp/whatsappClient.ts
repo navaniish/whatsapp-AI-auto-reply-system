@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
-import { setQR, setStatus } from '../state';
+import { setQR, setStatus, setError } from '../state';
 import { PiiRedactor } from '../privacy/piiRedactor';
 import { IntentClassifier } from '../classifiers/intentClassifier';
 import { ContextAssembler } from '../memory/contextAssembler';
@@ -23,6 +23,40 @@ import { PersonaManager } from '../features/personaManager';
 import { AwayMessageScheduler } from '../features/awayMessageScheduler';
 import { FollowUpEngine } from '../features/followUpEngine';
 
+function getChromeExecutablePath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    if (fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+      console.log(`[WhatsApp] Using PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+      return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    console.warn(`[WhatsApp] Specified PUPPETEER_EXECUTABLE_PATH not found: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+  }
+
+  // Common Linux / Docker paths
+  const linuxPaths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome'
+  ];
+  for (const p of linuxPaths) {
+    if (fs.existsSync(p)) {
+      console.log(`[WhatsApp] Auto-detected Linux Chromium at: ${p}`);
+      return p;
+    }
+  }
+
+  // macOS path
+  const macPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (fs.existsSync(macPath)) {
+    console.log(`[WhatsApp] Auto-detected macOS Chrome at: ${macPath}`);
+    return macPath;
+  }
+
+  console.log('[WhatsApp] No custom executable found, letting Puppeteer use bundled executable');
+  return undefined;
+}
+
 export class WhatsAppNativeClient {
   private client: Client;
   private classifier: IntentClassifier;
@@ -41,10 +75,12 @@ export class WhatsAppNativeClient {
     this.llmGateway = llmGateway;
     this.hitlQueue = hitlQueue;
 
+    const execPath = getChromeExecutablePath();
+
     this.client = new Client({
       authStrategy: new LocalAuth({ dataPath: './whatsapp_session' }),
       puppeteer: {
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        ...(execPath ? { executablePath: execPath } : {}),
         headless: true,
         protocolTimeout: 120000, // 2 min timeout — prevents premature timeout on slow load
         ignoreDefaultArgs: ['--enable-automation'],
@@ -72,6 +108,7 @@ export class WhatsAppNativeClient {
 
   public async initialize(): Promise<void> {
     setStatus('disconnected');
+    setError(null);
 
     this.client.on('qr', (qr) => {
       setQR(qr);
@@ -86,6 +123,7 @@ export class WhatsAppNativeClient {
     this.client.on('ready', () => {
       setStatus('connected');
       setQR(null);
+      setError(null);
       console.log('\n✅ WHATSAPP CONNECTED — AI Agent is listening for messages.\n');
 
       // Auto-scan unread messages 5s after connection
@@ -108,9 +146,9 @@ export class WhatsAppNativeClient {
       );
     });
 
-    this.client.on('disconnected', () => {
+    this.client.on('disconnected', (reason) => {
       setStatus('disconnected');
-      console.log('[WhatsApp] Disconnected.');
+      console.log('[WhatsApp] Disconnected:', reason);
     });
 
     const processedIds = new Set<string>();
@@ -139,7 +177,9 @@ export class WhatsAppNativeClient {
     try {
       await this.client.initialize();
     } catch (err) {
-      console.warn('⚠️ [WhatsApp Engine] Connection init note:', (err as Error).message);
+      const errMsg = (err as Error).message || String(err);
+      console.error('[WhatsApp Client Initialization Error]:', errMsg);
+      setError(errMsg);
     }
   }
 
@@ -692,10 +732,12 @@ Context: ${context.formattedContext}`;
     setQR(null);
     setStatus('disconnected');
 
+    const execPath = getChromeExecutablePath();
+
     this.client = new Client({
       authStrategy: new LocalAuth({ dataPath: './whatsapp_session' }),
       puppeteer: {
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        ...(execPath ? { executablePath: execPath } : {}),
         headless: true,
         protocolTimeout: 120000,
         ignoreDefaultArgs: ['--enable-automation'],
