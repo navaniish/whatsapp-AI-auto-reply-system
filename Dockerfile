@@ -65,7 +65,7 @@ EXPOSE 3000
 
 # Health check endpoint for Cloud auto-recovery
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 # Default execution command
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["node", "dist/index.js"]
