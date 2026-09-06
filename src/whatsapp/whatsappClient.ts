@@ -732,14 +732,17 @@ Context: ${context.formattedContext}`;
     } catch { /* ignore */ }
 
     const sessionPath = path.join(process.cwd(), 'whatsapp_session');
-    if (fs.existsSync(sessionPath)) {
-      try {
-        fs.rmSync(sessionPath, { recursive: true, force: true });
-        console.log('[WhatsApp] Removed old session folder.');
-      } catch (e) {
-        console.warn('[WhatsApp] Could not remove session directory:', (e as Error).message);
+    const baileysPath = path.join(process.cwd(), 'auth_info_baileys');
+    [sessionPath, baileysPath].forEach(dir => {
+      if (fs.existsSync(dir)) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+          console.log(`[WhatsApp] Removed old session folder: ${path.basename(dir)}`);
+        } catch (e) {
+          console.warn(`[WhatsApp] Could not remove directory ${path.basename(dir)}:`, (e as Error).message);
+        }
       }
-    }
+    });
 
     setQR(null);
     setStatus('disconnected');

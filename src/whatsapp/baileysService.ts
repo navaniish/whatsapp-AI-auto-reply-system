@@ -1,4 +1,5 @@
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
@@ -51,7 +52,7 @@ export class BaileysWhatsAppService {
     this.sock = makeWASocket({
       auth: authState,
       printQRInTerminal: false, // We use custom qrcode-terminal rendering
-      browser: ['AI Co-Pilot', 'Chrome', '1.0.0']
+      browser: Browsers.ubuntu('Chrome')
     });
 
     this.sock.ev.on('creds.update', saveCreds);
