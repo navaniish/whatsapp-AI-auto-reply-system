@@ -52,13 +52,13 @@ WORKDIR /app
 
 # Copy package manifests and install dependencies
 COPY package*.json tsconfig.json ./
-RUN npm ci --only=production
+RUN npm install
 
 # Copy application source code
 COPY . .
 
 # Build TypeScript
-RUN npm run build || true
+RUN npm run build
 
 # Expose server port
 EXPOSE 3000
