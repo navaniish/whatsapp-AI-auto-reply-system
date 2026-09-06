@@ -44,11 +44,23 @@ export class WhatsAppNativeClient {
       puppeteer: {
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         headless: true,
-        protocolTimeout: 60000, // Increase timeout to prevent Runtime.callFunctionOn timeout
+        protocolTimeout: 120000, // 2 min timeout — prevents premature timeout on slow load
         ignoreDefaultArgs: ['--enable-automation'],
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',          // Prevents shared-memory OOM crashes in headless
+          '--disable-gpu',                     // Avoid GPU context crashes in headless mode
+          '--disable-software-rasterizer',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-ipc-flooding-protection',
+          '--memory-pressure-off',
+          '--no-first-run',
+          '--no-zygote',
           '--disable-blink-features=AutomationControlled',
           '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
         ]
@@ -86,7 +98,7 @@ export class WhatsAppNativeClient {
 
       // Initialize Follow-Up Engine with sender and LLM capabilities
       FollowUpEngine.initialize(
-        (jid: string, text: string) => this.sendTextMessage(jid, text),
+        async (jid: string, text: string) => { await this.sendTextMessage(jid, text); },
         async (prompt: string) => {
           const r = await this.llmGateway.generateCompletion('You are a friendly assistant sending a follow-up message.', prompt, false);
           return r.rawText?.trim() || "Hey! Just checking in 👋";

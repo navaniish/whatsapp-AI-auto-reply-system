@@ -2,7 +2,8 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
-  proto
+  proto,
+  BaileysEventMap
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import { PiiRedactor } from '../privacy/piiRedactor';
@@ -47,7 +48,7 @@ export class BaileysWhatsAppService {
     this.sock.ev.on('creds.update', saveCreds);
 
     // Connection updates (QR code display & reconnects)
-    this.sock.ev.on('connection.update', (update) => {
+    this.sock.ev.on('connection.update', (update: BaileysEventMap['connection.update']) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -76,7 +77,7 @@ export class BaileysWhatsAppService {
     });
 
     // Inbound Messages Listener
-    this.sock.ev.on('messages.upsert', async (m) => {
+    this.sock.ev.on('messages.upsert', async (m: BaileysEventMap['messages.upsert']) => {
       if (m.type !== 'notify') return;
 
       for (const msg of m.messages) {
@@ -129,7 +130,7 @@ export class BaileysWhatsAppService {
    * Processes incoming WhatsApp messages through the 8-step pipeline.
    */
   private async processIncomingMessage(msg: proto.IWebMessageInfo): Promise<void> {
-    if (!msg.message || msg.key.fromMe) return;
+    if (!msg.message || !msg.key || msg.key.fromMe) return;
 
     const remoteJid = msg.key.remoteJid;
     const pushName = msg.pushName || 'there';

@@ -44,12 +44,13 @@ async function runSimulation() {
     const confidence = llmResp.jsonOutput?.confidence || classification.confidence;
 
     // 5. Guardrail Decision
-    const decision = GuardrailValidator.validate(
+    const decision = await GuardrailValidator.validateWithSafety(
       replyText,
       confidence,
       classification.riskScore,
       classification.requiresHuman,
-      true
+      true,
+      llm
     );
 
     console.log(`3. Generated Reply: "${replyText}"`);

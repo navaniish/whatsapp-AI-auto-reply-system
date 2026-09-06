@@ -33,7 +33,7 @@ const envSchema = z.object({
   
   // Human-In-The-Loop WhatsApp Owner Config
   OWNER_WHATSAPP_NUMBER: z.string().optional(),
-  
+
   // Policy & Safety Thresholds
   AUTO_SEND_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.95),
   DRAFT_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.70),

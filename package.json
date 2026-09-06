@@ -24,6 +24,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@types/qrcode": "^1.5.6",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -46,5 +47,9 @@
     "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
+  },
+  "allowScripts": {
+    "@whiskeysockets/baileys@7.0.0-rc14": true,
+    "protobufjs@7.6.6": true
   }
 }
