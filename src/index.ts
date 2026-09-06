@@ -730,7 +730,7 @@ app.post('/v1/followup', (req: Request, res: Response) => {
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 
-const PORT = Number(config.PORT) || 3000;
+const PORT = Number(process.env.PORT || config.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n========================================================================`);
   console.log(`🚀 PERSONAL WHATSAPP AI CONTEXTUAL REPLY AGENT ACTIVE`);
