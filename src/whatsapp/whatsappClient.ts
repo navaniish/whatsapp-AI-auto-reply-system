@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import { setQR, setStatus } from '../state';
@@ -669,5 +671,55 @@ Context: ${context.formattedContext}`;
         await msg.reply(`Sorry, hit a glitch! Someone will follow up with you.`);
       } catch { /* ignore */ }
     }
+  }
+
+  public async resetSession(): Promise<void> {
+    console.log('[WhatsApp] Force resetting session...');
+    try {
+      await this.client.destroy().catch(() => {});
+    } catch { /* ignore */ }
+
+    const sessionPath = path.join(process.cwd(), 'whatsapp_session');
+    if (fs.existsSync(sessionPath)) {
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        console.log('[WhatsApp] Removed old session folder.');
+      } catch (e) {
+        console.warn('[WhatsApp] Could not remove session directory:', (e as Error).message);
+      }
+    }
+
+    setQR(null);
+    setStatus('disconnected');
+
+    this.client = new Client({
+      authStrategy: new LocalAuth({ dataPath: './whatsapp_session' }),
+      puppeteer: {
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        headless: true,
+        protocolTimeout: 120000,
+        ignoreDefaultArgs: ['--enable-automation'],
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-ipc-flooding-protection',
+          '--memory-pressure-off',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-blink-features=AutomationControlled',
+          '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+        ]
+      }
+    });
+
+    await this.initialize();
   }
 }

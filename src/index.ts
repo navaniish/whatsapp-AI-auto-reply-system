@@ -58,6 +58,21 @@ app.get('/.well-known/appspecific/com.chrome.devtools.json', (_req: Request, res
   res.json({ version: '1.0', workspace: { root: process.cwd(), uuid: 'whatsapp-ai-agent' } });
 });
 
+// /reset-session — Clear whatsapp_session and generate brand new QR
+app.all('/reset-session', async (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  try {
+    await whatsappClient.resetSession();
+    res.send(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3;url=/qr"><title>Resetting WhatsApp...</title>
+<style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px;text-align:center}
+.spin{width:44px;height:44px;border:4px solid #30363d;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:24px}p{color:#8b949e}</style></head>
+<body><div class="spin"></div><h1>🔄 Session Cleared!</h1><p>Re-launching Chrome & generating new QR code... redirecting in 3s</p></body></html>`);
+  } catch (err) {
+    res.status(500).send(`Failed to reset session: ${(err as Error).message}`);
+  }
+});
+
 // /qr — Live scannable QR code page
 app.get('/qr', async (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -65,17 +80,31 @@ app.get('/qr', async (_req: Request, res: Response) => {
   if (state.status === 'connected') {
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WhatsApp Connected</title>
 <style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px;text-align:center}
-h1{font-size:28px}p{color:#8b949e}</style></head>
-<body><h1>✅ WhatsApp Connected!</h1><p>Your AI Agent is live and replying to messages.</p></body></html>`);
+h1{font-size:28px}p{color:#8b949e}
+.btn{display:inline-block;padding:10px 20px;background:#238636;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-top:12px}
+.btn-danger{background:#da3633}</style></head>
+<body><h1>✅ WhatsApp Connected!</h1><p>Your AI Agent is live and replying to messages.</p>
+<a href="/" class="btn">Go to Dashboard</a>
+<a href="/reset-session" class="btn btn-danger" onclick="return confirm('Disconnect and generate new QR?')">Disconnect & Re-scan</a>
+</body></html>`);
     return;
   }
 
   if (!state.qrString) {
     res.send(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3"><title>QR Loading...</title>
-<style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px}
-.spin{width:44px;height:44px;border:4px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-p{color:#8b949e}</style></head>
-<body><div class="spin"></div><p>Starting WhatsApp engine… auto-refreshes in 3s</p></body></html>`);
+<style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px;text-align:center}
+.spin{width:44px;height:44px;border:4px solid #30363d;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+p{color:#8b949e;font-size:14px}
+.btn{display:inline-block;padding:10px 20px;background:#30363d;color:#e6edf3;text-decoration:none;border-radius:8px;font-size:13px;font-weight:600;margin-top:12px;border:1px solid #484f58;transition:.2s}
+.btn:hover{background:#484f58}
+</style></head>
+<body>
+  <div class="spin"></div>
+  <h1>📱 Starting WhatsApp Engine…</h1>
+  <p>Launching browser and waiting for QR code. Auto-refreshes every 3 seconds.</p>
+  <p>If loading takes more than 15 seconds, your previous session may be stuck:</p>
+  <a href="/reset-session" class="btn">🔄 Clear Stale Session & Force New QR</a>
+</body></html>`);
     return;
   }
 
@@ -97,6 +126,8 @@ p.sub{color:#8b949e;font-size:13px;margin-bottom:28px}
 .hint{margin-top:24px;font-size:13px;color:#8b949e;line-height:1.8}
 .hint b{color:#e6edf3}
 .refresh{margin-top:16px;font-size:11px;color:#484f58}
+.reset-link{margin-top:14px;display:inline-block;font-size:12px;color:#8b949e;text-decoration:none}
+.reset-link:hover{color:#f85149;text-decoration:underline}
 </style></head>
 <body><div class="card">
   <div class="badge"><span class="dot"></span>Waiting for scan</div>
@@ -107,6 +138,7 @@ p.sub{color:#8b949e;font-size:13px;margin-bottom:28px}
     Open WhatsApp → <b>Settings</b> → <b>Linked Devices</b><br>→ <b>Link a Device</b> → scan this QR
   </div>
   <p class="refresh">⟳ QR auto-refreshes every 20 seconds</p>
+  <a href="/reset-session" class="reset-link" onclick="return confirm('Reset WhatsApp session and regenerate QR?')">🔄 Need a fresh QR code? Reset Session</a>
 </div></body></html>`);
 });
 
