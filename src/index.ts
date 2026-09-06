@@ -696,12 +696,12 @@ app.post('/v1/followup', (req: Request, res: Response) => {
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 
-const PORT = config.PORT;
-app.listen(PORT, async () => {
+const PORT = Number(config.PORT) || 3000;
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n========================================================================`);
   console.log(`🚀 PERSONAL WHATSAPP AI CONTEXTUAL REPLY AGENT ACTIVE`);
-  console.log(`📡 Dashboard:  http://localhost:${PORT}`);
-  console.log(`❤️  Health:     http://localhost:${PORT}/health`);
+  console.log(`📡 Dashboard:  http://0.0.0.0:${PORT}`);
+  console.log(`❤️  Health:     http://0.0.0.0:${PORT}/health`);
   console.log(`========================================================================\n`);
 
   console.log('Initializing WhatsApp Engine...');
