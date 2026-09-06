@@ -59,18 +59,18 @@ app.get('/.well-known/appspecific/com.chrome.devtools.json', (_req: Request, res
 });
 
 // /reset-session — Clear whatsapp_session and generate brand new QR
-app.all('/reset-session', async (_req: Request, res: Response) => {
+app.all('/reset-session', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  try {
-    await whatsappClient.resetSession();
-    res.send(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3;url=/qr"><title>Resetting WhatsApp...</title>
+  // Trigger session reset asynchronously so the HTTP request responds immediately without 502 proxy timeout
+  whatsappClient.resetSession().catch(err => {
+    console.error('[Session Reset Error]:', (err as Error).message);
+  });
+
+  res.send(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3;url=/qr"><title>Resetting WhatsApp...</title>
 <style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:16px;text-align:center}
 .spin{width:44px;height:44px;border:4px solid #30363d;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 h1{font-size:24px}p{color:#8b949e}</style></head>
-<body><div class="spin"></div><h1>🔄 Session Cleared!</h1><p>Re-launching Chrome & generating new QR code... redirecting in 3s</p></body></html>`);
-  } catch (err) {
-    res.status(500).send(`Failed to reset session: ${(err as Error).message}`);
-  }
+<body><div class="spin"></div><h1>🔄 Session Cleared!</h1><p>Re-launching WhatsApp engine & generating new QR code... redirecting to QR code in 3s</p></body></html>`);
 });
 
 // /qr — Live scannable QR code page
