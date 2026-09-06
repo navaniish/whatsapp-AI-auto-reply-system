@@ -6,6 +6,9 @@ import makeWASocket, {
   BaileysEventMap
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
+import fs from 'fs';
+import path from 'path';
+import { setQR, setStatus, setError } from '../state';
 import { PiiRedactor } from '../privacy/piiRedactor';
 import { IntentClassifier } from '../classifiers/intentClassifier';
 import { ContextAssembler } from '../memory/contextAssembler';
@@ -33,14 +36,20 @@ export class BaileysWhatsAppService {
     this.hitlQueue = hitlQueue;
   }
 
+  public async initialize(): Promise<void> {
+    return this.startConnection();
+  }
+
   /**
    * Starts the direct Baileys WhatsApp connection with QR Code rendering in terminal.
    */
   public async startConnection(): Promise<void> {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    setStatus('disconnected');
+    setError(null);
+    const { state: authState, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
     this.sock = makeWASocket({
-      auth: state,
+      auth: authState,
       printQRInTerminal: false, // We use custom qrcode-terminal rendering
       browser: ['AI Co-Pilot', 'Chrome', '1.0.0']
     });
@@ -52,6 +61,7 @@ export class BaileysWhatsAppService {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        setQR(qr);
         console.log('\n========================================================================');
         console.log('📱 SCAN THIS QR CODE WITH WHATSAPP ON YOUR PHONE:');
         console.log('1. Open WhatsApp on your mobile phone');
@@ -62,13 +72,17 @@ export class BaileysWhatsAppService {
       }
 
       if (connection === 'close') {
-        const shouldReconnect =
-          (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
+        const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        setStatus('disconnected');
         console.log('Connection closed due to error. Reconnecting:', shouldReconnect);
         if (shouldReconnect) {
           this.startConnection();
         }
       } else if (connection === 'open') {
+        setStatus('connected');
+        setQR(null);
+        setError(null);
         console.log('\n========================================================================');
         console.log('✅ WHATSAPP CONNECTED SUCCESSFULLY VIA BAILEYS NATIVE ENGINE!');
         console.log('AI Agent is now active and listening for live incoming messages.');
@@ -270,5 +284,28 @@ ${context.formattedContext}`;
       const humanizedHandoff = `Thanks for reaching out, ${pushName}! A member of our team will get back to you personally in just a bit. 😊`;
       await this.sendTextMessage(remoteJid, humanizedHandoff);
     }
+  }
+
+  public async resetSession(): Promise<void> {
+    console.log('[Baileys] Force resetting session...');
+    try {
+      this.sock?.ws.close();
+    } catch { /* ignore */ }
+
+    const sessionPath = path.join(process.cwd(), 'auth_info_baileys');
+    if (fs.existsSync(sessionPath)) {
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        console.log('[Baileys] Removed auth_info_baileys directory');
+      } catch (e) {
+        console.warn('[Baileys] Error removing auth directory:', (e as Error).message);
+      }
+    }
+
+    setQR(null);
+    setStatus('disconnected');
+    setError(null);
+
+    await this.startConnection();
   }
 }

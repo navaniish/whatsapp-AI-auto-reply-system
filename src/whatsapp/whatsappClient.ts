@@ -15,6 +15,7 @@ import { ConversationMemoryEngine } from '../memory/conversationMemory';
 import { RealTypingBroadcaster } from './realTypingBroadcaster';
 import { ContactQueueManager } from './contactQueue';
 import { config } from '../config';
+import { BaileysWhatsAppService } from './baileysService';
 // ── Advanced Feature Imports ───────────────────────────────────────────────
 import { AnalyticsEngine } from '../analytics/analyticsEngine';
 import { DndScheduler } from '../features/dndScheduler';
@@ -63,6 +64,7 @@ export class WhatsAppNativeClient {
   private contextAssembler: ContextAssembler;
   private llmGateway: LLMGateway;
   private hitlQueue: WhatsAppReviewQueue;
+  private baileysFallback?: BaileysWhatsAppService;
 
   constructor(
     classifier: IntentClassifier,
@@ -178,8 +180,14 @@ export class WhatsAppNativeClient {
       await this.client.initialize();
     } catch (err) {
       const errMsg = (err as Error).message || String(err);
-      console.error('[WhatsApp Client Initialization Error]:', errMsg);
-      setError(errMsg);
+      console.warn('⚠️ [WhatsApp Engine] Puppeteer Chrome launch failed. Auto-activating Baileys WebSocket native engine fallback for Cloud...', errMsg);
+      this.baileysFallback = new BaileysWhatsAppService(
+        this.classifier,
+        this.contextAssembler,
+        this.llmGateway,
+        this.hitlQueue
+      );
+      await this.baileysFallback.startConnection();
     }
   }
 
@@ -715,6 +723,10 @@ Context: ${context.formattedContext}`;
 
   public async resetSession(): Promise<void> {
     console.log('[WhatsApp] Force resetting session...');
+    if (this.baileysFallback) {
+      await this.baileysFallback.resetSession();
+      return;
+    }
     try {
       await this.client.destroy().catch(() => {});
     } catch { /* ignore */ }
